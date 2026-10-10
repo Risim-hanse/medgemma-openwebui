@@ -1,0 +1,54 @@
+# markdown excluded per owner request
+*.md
+
+# env / caches
+venv/
+.cache/
+__pycache__/
+*.py[cod]
+*.token
+
+# studio / tooling dotfiles (not project code)
+.bashrc
+.chainlit/
+.condarc
+.config/
+.copilot/
+.cursor-server
+.docker/
+.gitconfig
+.hushlogin
+.idea/
+.jupyter/
+.lesshst
+.lightning_studio/
+.lightningignore
+.local/
+.npm/
+.nv/
+.nvm
+.oh-my-zsh/
+.profile
+.ssh/
+.streamlit/
+.sudo_as_admin_successful
+.vimrc
+.vscode/
+.vscode-server
+.w3m/
+.wget-hsts
+.windsurf-server
+.zcompdump
+.zed_server/
+.zsh_history
+.zshrc
+
+# third-party clones (own upstream history), not project code
+LinaCodec/
+ZipVoice/
+fast-music-remover/
+
+# heavy generated artifacts (wavs, dbs, uploads)
+output/
+fast-music-remover/uploads/
+med-gemma/data/

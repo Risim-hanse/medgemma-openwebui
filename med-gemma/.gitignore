@@ -1,0 +1,16 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# MedGuard reference data (rebuilt via data/fetch_data.py + data/build_db.py)
+# NOTE: data/manifest.json is intentionally TRACKED (provenance pin).
+data/raw/
+data/*.db*
+data/cache/
