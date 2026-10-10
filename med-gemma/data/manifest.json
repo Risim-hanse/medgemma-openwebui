@@ -1,0 +1,107 @@
+{
+  "fetched_at": "2026-10-10T06:27:53.991123+00:00",
+  "files": {
+    "ddinter_code_A.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_A.csv",
+      "file": "raw/ddinter_code_A.csv",
+      "bytes": 3343434,
+      "sha256": "a22ca451d2b755ca2331886f7e00540c86f555f9f55704a59a19c691251f52e0"
+    },
+    "ddinter_code_B.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_B.csv",
+      "file": "raw/ddinter_code_B.csv",
+      "bytes": 867726,
+      "sha256": "76de5115a55587f0e822e1096b684fd3ddde058fbefcbb19896df58820ace130"
+    },
+    "ddinter_code_C.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_C.csv",
+      "file": "raw/ddinter_code_C.csv",
+      "bytes": 3453462,
+      "sha256": "0885978959af84e183cfc86c8bcb48536f690a4c7e951eff06607a5616883aeb"
+    },
+    "ddinter_code_D.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_D.csv",
+      "file": "raw/ddinter_code_D.csv",
+      "bytes": 1520704,
+      "sha256": "c0627ec39965dbe27829e4934cd20d71eb079f4e373287678737bba9423a306a"
+    },
+    "ddinter_code_G.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_G.csv",
+      "file": "raw/ddinter_code_G.csv",
+      "bytes": 1994473,
+      "sha256": "6a4d8d1eaac6da1ffc54bd23a625f9c5e28e3ca37bd26b3bca4d2cc26505fb99"
+    },
+    "ddinter_code_H.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_H.csv",
+      "file": "raw/ddinter_code_H.csv",
+      "bytes": 705088,
+      "sha256": "f0f925f0ba1ee68c4668d3e7a6732719b34623b22a0f5d017f9090e59f63c88e"
+    },
+    "ddinter_code_J.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_J.csv",
+      "file": "raw/ddinter_code_J.csv",
+      "bytes": 2554201,
+      "sha256": "e5dbb8e5cb3179905b426ee4a2ee5c93756c38cdd54215a55c5b8255a5b14e04"
+    },
+    "ddinter_code_L.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_L.csv",
+      "file": "raw/ddinter_code_L.csv",
+      "bytes": 3885702,
+      "sha256": "f54f4486cc00344f8c86508c31c2ca3fad6d1d37ec3af5bcf609b4bbda5507ef"
+    },
+    "ddinter_code_M.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_M.csv",
+      "file": "raw/ddinter_code_M.csv",
+      "bytes": 1271889,
+      "sha256": "2a57eb78818803b4662116490023c20c8bbfe145e60c35680a0efb8ac635a0ad"
+    },
+    "ddinter_code_N.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_N.csv",
+      "file": "raw/ddinter_code_N.csv",
+      "bytes": 5218194,
+      "sha256": "854733ff382210b030bcece135113f01ca3f6924d3803feca2ff71c1d939c797"
+    },
+    "ddinter_code_P.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_P.csv",
+      "file": "raw/ddinter_code_P.csv",
+      "bytes": 317460,
+      "sha256": "83f8c0edb20d09ef29b8500b48f9623e208379525688ade9e70a7df2d8749d55"
+    },
+    "ddinter_code_R.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_R.csv",
+      "file": "raw/ddinter_code_R.csv",
+      "bytes": 1793766,
+      "sha256": "1c39c3d4a6e41659b7a988538d7f363867592abc6f41a815de8746f6e2150574"
+    },
+    "ddinter_code_S.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_S.csv",
+      "file": "raw/ddinter_code_S.csv",
+      "bytes": 1932541,
+      "sha256": "c3888df996d97ebf1346b11a98df0b334cfa3c150a89a31150ffd354eebcbfe5"
+    },
+    "ddinter_code_U.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_U.csv",
+      "file": "raw/ddinter_code_U.csv",
+      "bytes": 2235214,
+      "sha256": "3f16a6fad266af2cb29fff696413c0e3efb0e4c6969d7e8427586685af3755a6"
+    },
+    "ddinter_code_V.csv": {
+      "url": "https://ddinter.scbdd.com/static/media/download/ddinter_downloads_code_V.csv",
+      "file": "raw/ddinter_code_V.csv",
+      "bytes": 700777,
+      "sha256": "353973fb300453946aea95733e8fb52338e4b59426d2ce6ca318363d4f84f10a"
+    },
+    "banned-drugs.csv": {
+      "url": "https://blacklisted.co.in/data/banned-drugs.csv",
+      "file": "raw/banned-drugs.csv",
+      "bytes": 349184,
+      "sha256": "2465d8c50b09a0d1a92d91b99aecf87163e513285e2582291cdb794d3503002d"
+    },
+    "indian_brands.csv": {
+      "url": "https://huggingface.co/datasets/revooda/indian-pharma-data/resolve/main/indian_pharmaceutical_products_clean.csv",
+      "file": "raw/indian_brands.csv",
+      "bytes": 72835140,
+      "sha256": "c99c4a174164ed9b85187b6cccbe4254c2c08b3e44a32a684daf529de363f3ce"
+    }
+  }
+}

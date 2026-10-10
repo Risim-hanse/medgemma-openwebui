@@ -1,96 +1,98 @@
-"""ZipVoice zero-shot TTS bridge (Phase 6).
+"""LuxTTS voice bridge — read MedGuard explanations aloud.
 
-Runs the sibling ZipVoice checkout as a SUBPROCESS — never import it into the
-MedGemma venv (k2/lhotse/piper_phonemize conflict with this env).
+LuxTTS is the bundled sibling TTS (lightweight ZipVoice-based cloner, 48 kHz,
+~1 GB VRAM, voices in ../LuxTTS/voices). It pins transformers<=4.57.6, which
+conflicts with this venv's transformers 5.x — so it ALWAYS runs as a
+subprocess under its own venv. Never import it here.
 
-Needs:
-  - a working ZipVoice env:  ../ZipVoice/.venv  (or set ZIPVOICE_PYTHON)
-  - a voice prompt wav + its transcript (zero-shot cloning)
-  - a ZipVoice checkpoint (auto-downloads from HF on first use)
-
-Long texts are chunked into sentences, synthesized via one --test-list run,
-then concatenated.
+Env:
+  LUXTTS_REPO    default: <med-gemma>/../LuxTTS
+  LUXTTS_PYTHON  default: <repo>/.venv/bin/python
 """
 
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
-ZIPVOICE_REPO = Path(os.environ.get("ZIPVOICE_REPO",
-                                    PROJECT_ROOT.parent / "ZipVoice"))
-ZIPVOICE_PYTHON = os.environ.get(
-    "ZIPVOICE_PYTHON", str(ZIPVOICE_REPO / ".venv" / "bin" / "python"))
+from .config import PROJECT_ROOT
+
+LUXTTS_REPO = Path(os.environ.get("LUXTTS_REPO", PROJECT_ROOT.parent / "LuxTTS"))
+LUXTTS_PYTHON = os.environ.get("LUXTTS_PYTHON", str(LUXTTS_REPO / ".venv" / "bin" / "python"))
+SAMPLE_RATE = 48000
 
 
-def _sentences(text: str, max_chars: int = 220) -> list[str]:
-    parts = re.split(r"(?<=[.!?])\s+", re.sub(r"\s+", " ", text).strip())
-    chunks, cur = [], ""
-    for p in parts:
-        if len(cur) + len(p) + 1 > max_chars and cur:
-            chunks.append(cur)
-            cur = p
-        else:
-            cur = (cur + " " + p).strip()
-    if cur:
-        chunks.append(cur)
-    return [c for c in chunks if c]
-
-
-def speak(text: str, prompt_wav, prompt_text: str = "",
-          model_name: str = "zipvoice", out_path: str | Path | None = None) -> Path:
-    """Synthesize `text`; returns path to wav. `prompt_wav` is bytes or path."""
-    if not Path(ZIPVOICE_PYTHON).exists():
+def _check() -> Path:
+    if not Path(LUXTTS_PYTHON).exists():
         raise RuntimeError(
-            f"ZipVoice python not found at {ZIPVOICE_PYTHON}. "
-            "Set ZIPVOICE_PYTHON or create ../ZipVoice/.venv (see ZipVoice README).")
-    if not (ZIPVOICE_REPO / "zipvoice" / "bin" / "infer_zipvoice.py").exists():
-        raise RuntimeError(f"ZipVoice repo not found at {ZIPVOICE_REPO}.")
+            f"LuxTTS python not found at {LUXTTS_PYTHON}. "
+            "Set LUXTTS_PYTHON or create the LuxTTS venv (see LuxTTS README).")
+    cli = LUXTTS_REPO / "infer.py"
+    if not cli.exists():
+        raise RuntimeError(f"LuxTTS repo not found at {LUXTTS_REPO} (set LUXTTS_REPO).")
+    return cli
 
-    chunks = _sentences(text)
-    if not chunks:
-        raise ValueError("Nothing to synthesize.")
-    tmp = Path(tempfile.mkdtemp(prefix="medguard_tts_"))
-    if hasattr(prompt_wav, "read"):  # file-like upload object
-        prompt_path = tmp / "prompt.wav"
-        prompt_path.write_bytes(prompt_wav.getvalue())
-    else:
-        prompt_path = Path(prompt_wav)
-    if not prompt_text:
-        raise ValueError("ZipVoice is zero-shot: provide the transcript of the voice sample.")
-    tsv = tmp / "test.tsv"
-    with open(tsv, "w") as f:
-        for i, ch in enumerate(chunks):
-            f.write(f"seg{i}\t{prompt_text}\t{prompt_path}\t{ch}\n")
-    res_dir = tmp / "out"
-    cmd = [ZIPVOICE_PYTHON, "-m", "zipvoice.bin.infer_zipvoice",
-           "--model-name", model_name, "--test-list", str(tsv),
-           "--res-dir", str(res_dir)]
-    r = subprocess.run(cmd, cwd=ZIPVOICE_REPO, capture_output=True, text=True, timeout=1200)
+
+def list_voices() -> list[str]:
+    """Reference voices available for cloning."""
+    cli = _check()
+    r = subprocess.run([LUXTTS_PYTHON, str(cli), "--list-voices"],
+                       cwd=LUXTTS_REPO, capture_output=True, text=True, timeout=60)
     if r.returncode != 0:
-        raise RuntimeError(f"ZipVoice failed:\n{r.stderr[-2000:]}")
-    wavs = sorted(res_dir.glob("*.wav"))
-    if not wavs:
-        raise RuntimeError("ZipVoice produced no audio.")
-    out = Path(out_path) if out_path else tmp / "medguard_explanation.wav"
-    if len(wavs) == 1:
-        out.write_bytes(wavs[0].read_bytes())
-        return out
-    # concatenate via stdlib wave (all chunks share sample params)
-    import wave
-    params = None
-    frames = []
-    for w in wavs:
-        with wave.open(str(w), "rb") as wh:
-            if params is None:
-                params = wh.getparams()
-            frames.append(wh.readframes(wh.getnframes()))
-    with wave.open(str(out), "wb") as wh:
-        wh.setparams(params)
-        for fr in frames:
-            wh.writeframes(fr)
+        raise RuntimeError(f"LuxTTS --list-voices failed:\n{r.stderr[-1500:]}")
+    voices = []
+    for line in r.stdout.splitlines():
+        line = line.strip()
+        if line[:2].strip().rstrip(".").isdigit():
+            voices.append(line.split(".", 1)[1].strip())
+    return voices
+
+
+def speak(text: str, voice: str | None = None, out_path: str | Path | None = None,
+          device: str = "auto", chunk_chars: int = 300, ref_text: str | None = None,
+          steps: int = 4, speed: float = 1.0, guidance: float = 3.0,
+          timeout: int = 1200) -> Path:
+    """Synthesize `text` with a cloned voice; returns the .wav path.
+
+    `voice` is a name fragment, index, or audio path (None = single default).
+    Long texts are chunked by LuxTTS itself (--chunk-chars).
+    """
+    cli = _check()
+    text = " ".join(text.split())
+    if not text:
+        raise ValueError("Nothing to synthesize.")
+    if ref_text is not None:
+        raise ValueError("ref_text passthrough is not supported by LuxTTS infer.py; "
+                         "omit it (whisper transcribes the prompt automatically).")
+    out = Path(out_path) if out_path else (
+        Path(tempfile.mkdtemp(prefix="medguard_tts_")) / f"medguard_{int(time.time())}.wav")
+    cmd = [LUXTTS_PYTHON, str(cli), "--device", device, "--steps", str(steps),
+           "--speed", str(speed), "--guidance", str(guidance),
+           "--chunk-chars", str(chunk_chars), "-o", str(out)]
+    if voice:
+        cmd += ["--voice", voice]
+    cmd.append(text)
+    r = subprocess.run(cmd, cwd=LUXTTS_REPO, capture_output=True, text=True, timeout=timeout)
+    if r.returncode != 0 or not out.exists():
+        raise RuntimeError(f"LuxTTS failed:\n{(r.stderr or r.stdout)[-2000:]}")
     return out
+
+
+if __name__ == "__main__":
+    import argparse
+    p = argparse.ArgumentParser(description="MedGuard LuxTTS bridge")
+    p.add_argument("text", nargs="?", default=None, help="text to speak")
+    p.add_argument("--voice", default=None)
+    p.add_argument("-o", "--out", default=None)
+    p.add_argument("--device", default="auto")
+    p.add_argument("--list-voices", action="store_true")
+    a = p.parse_args()
+    if a.list_voices:
+        print("\n".join(list_voices()))
+    elif not a.text:
+        p.error("no text given")
+    else:
+        print(speak(a.text, voice=a.voice, out_path=a.out, device=a.device))
