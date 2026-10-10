@@ -8,6 +8,12 @@ concurrency, so requests are serialized behind a lock.
 
 import base64
 import io
+import os
+
+# Must be set before the CUDA allocator initializes (first GPU op).
+# Reduces fragmentation-driven OOMs on the 15GB T4.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 import threading
 import time
 import uuid
@@ -66,21 +72,32 @@ class ChatRequest(BaseModel):
     model_config = {"extra": "ignore"}
 
 
+# Bound per-image memory: huge uploads explode pixel_values + image-token
+# counts (a single 4.78 GiB temp alloc OOMed the T4 3x). Gemma3's vision
+# tower works at 896px, so downscaling loses nothing diagnostically.
+MAX_IMAGE_DIM = 896
+
+
 def _decode_image(url: str) -> Image.Image:
-    """Load an image from an http(s) URL or a base64 data URI."""
+    """Load an image from an http(s) URL or a base64 data URI, capped at MAX_IMAGE_DIM."""
     import requests
 
     if url.startswith("data:"):
         b64 = url.split(",", 1)[1]
-        return Image.open(io.BytesIO(base64.b64decode(b64)))
-    resp = requests.get(
-        url,
-        # Wikimedia (and some CDNs) reject generic agents outright.
-        headers={"User-Agent": "medgemma-server/1.0 (local clinical tooling)"},
-        timeout=30,
-    )
-    resp.raise_for_status()
-    return Image.open(io.BytesIO(resp.content)).convert("RGB")
+        img = Image.open(io.BytesIO(base64.b64decode(b64))).convert("RGB")
+    else:
+        resp = requests.get(
+            url,
+            # Wikimedia (and some CDNs) reject generic agents outright.
+            headers={"User-Agent": "medgemma-server/1.0 (local clinical tooling)"},
+            timeout=30,
+        )
+        resp.raise_for_status()
+        img = Image.open(io.BytesIO(resp.content)).convert("RGB")
+    if max(img.size) > MAX_IMAGE_DIM:
+        img.thumbnail((MAX_IMAGE_DIM, MAX_IMAGE_DIM), Image.LANCZOS)
+    print(f"[image] {img.size} mode={img.mode}")
+    return img
 
 
 def _to_chat_messages(req: ChatRequest):
@@ -152,19 +169,30 @@ def _generate(req: ChatRequest, messages):
     limit = _resolve_limit(req)
 
     t0 = time.time()
-    with _LOCK:
-        from medgemma_common import build_inputs
+    try:
+        with _LOCK:
+            from medgemma_common import build_inputs
 
-        inputs = build_inputs(processor, model, messages)
-        prompt_len = inputs["input_ids"].shape[-1]
-        with torch.inference_mode():
-            out = model.generate(
-                **inputs,
-                max_new_tokens=limit,
-                do_sample=req.temperature > 0,
-                temperature=req.temperature if req.temperature > 0 else None,
-            )
-        text = processor.decode(out[0][prompt_len:], skip_special_tokens=True)
+            inputs = build_inputs(processor, model, messages)
+            prompt_len = inputs["input_ids"].shape[-1]
+            print(f"[generate] prompt {prompt_len} tok, max_new {limit}")
+            with torch.inference_mode():
+                try:
+                    out = model.generate(
+                        **inputs,
+                        max_new_tokens=limit,
+                        do_sample=req.temperature > 0,
+                        temperature=req.temperature if req.temperature > 0 else None,
+                    )
+                except torch.cuda.OutOfMemoryError:
+                    raise HTTPException(
+                        503,
+                        "GPU out of memory on this request (prompt too large). "
+                        "Try a smaller image or shorter prompt, then retry.",
+                    )
+            text = processor.decode(out[0][prompt_len:], skip_special_tokens=True)
+    finally:
+        torch.cuda.empty_cache()
     dt = time.time() - t0
 
     new_tokens = out.shape[-1] - prompt_len
@@ -181,36 +209,43 @@ def chat(req: ChatRequest):
     model_name = req.model or MODEL_ID
 
     if req.stream:
-        from medgemma_common import build_inputs
         from transformers import TextIteratorStreamer
 
         model, processor = _STATE["model"], _STATE["processor"]
         limit = _resolve_limit(req)
-        try:
-            inputs = build_inputs(processor, model, messages)
-        except Exception as exc:
-            raise HTTPException(400, f"input build failed: {exc}")
-        prompt_len = inputs["input_ids"].shape[-1]
         # AutoProcessor wraps a tokenizer; streamer needs the tokenizer.
         tok = getattr(processor, "tokenizer", processor)
         streamer = TextIteratorStreamer(tok, skip_prompt=True, skip_special_tokens=True)
-        gen_kwargs = dict(
-            **inputs,
-            streamer=streamer,
-            max_new_tokens=limit,
-            do_sample=req.temperature > 0,
-            temperature=req.temperature if req.temperature > 0 else None,
-        )
         holder: dict = {}
         t0 = time.time()
 
         def _run():
+            # Build + generate both happen under the lock so concurrent
+            # requests can't stack GPU allocations and OOM each other.
             with _LOCK:
-                with torch.inference_mode():
-                    try:
+                try:
+                    from medgemma_common import build_inputs
+
+                    inputs = build_inputs(processor, model, messages)
+                    holder["prompt_len"] = inputs["input_ids"].shape[-1]
+                    print(f"[stream] prompt {holder['prompt_len']} tok, max_new {limit}")
+                    gen_kwargs = dict(
+                        inputs,
+                        streamer=streamer,
+                        max_new_tokens=limit,
+                        do_sample=req.temperature > 0,
+                        temperature=req.temperature if req.temperature > 0 else None,
+                    )
+                    with torch.inference_mode():
                         holder["out"] = model.generate(**gen_kwargs)
-                    except Exception as exc:  # surfaced after stream ends
-                        holder["error"] = exc
+                except Exception as exc:  # surfaced after stream ends
+                    holder["error"] = exc
+                    try:
+                        streamer.end()  # unblock the SSE loop below
+                    except Exception:
+                        pass
+                finally:
+                    torch.cuda.empty_cache()
 
         thread = threading.Thread(target=_run, daemon=True)
         thread.start()
@@ -241,6 +276,7 @@ def chat(req: ChatRequest):
             finally:
                 thread.join(timeout=300)
             text_full = "".join(full)
+            prompt_len = holder.get("prompt_len", 0)
             # Exact token counts when generate returned; else estimate.
             try:
                 out = holder.get("out")
